@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+active_env/
+conda-env/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# MLOps / Deep Learning Weight Binaries (CRITICAL: Do not commit heavy model weights to Git!)
+weights/
+*.h5
+*.pt
+*.bin
+*.onnx
+*.ckpt
+*.pb
