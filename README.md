@@ -16,6 +16,31 @@
 
 - Defensive Programming: 입력 서열의 유효성 검사(A, T, G, C 외 예외 처리) 및 서버 인프라 내 가중치 파일 유무를 체크하는 예외 처리 로직을 촘꼼히 반영하여 파이프라인의 안정성을 높였습니다.
 
+# PREREQUISITE (Important)
+
+본 파이프라인의 AI 예측을 정상적으로 구동하기 위해서는 각 모델의 사전 학습된 가중치(Weights) 파일이 `weights/` 디렉토리 내에 존재해야 합니다.
+
+```bash
+# 가중치 파일이 저장될 폴더를 만들고 이동합니다.
+mkdir -p weights && cd weights
+
+# 1. DeepSpCas9 가중치 (SpCas9 용)
+# 출처: Yonsei Univ. Kim Lab Official GitHub
+wget -O DeepSpCas9_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5)"
+
+# 2. DeepCpf1 가중치 (Cas12a 용)
+# 출처: Yonsei Univ. Kim Lab Official GitHub
+wget -O DeepCpf1_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5)"
+
+# 3. PRIDICT 가중치 (Prime Editor 용)
+# 출처: PRIDICT 공식 Zenodo 아카이브 (원작자 배포 링크)
+# 주의: PRIDICT 모델은 용량이 크므로 다운로드에 시간이 걸릴 수 있습니다.
+wget -O PRIDICT_model.pt "[https://zenodo.org/record/8208465/files/pridict_v2_model.pt](https://zenodo.org/record/8208465/files/pridict_v2_model.pt)"
+
+# 다운로드가 완료되면 다시 상위 폴더로 빠져나옵니다.
+cd ..
+```
+
 # How to Run
 
 ```bash
