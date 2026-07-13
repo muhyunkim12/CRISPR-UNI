@@ -84,3 +84,9 @@ pip install torch torchvision torchaudio transformers
 # 4. モデル重み付け(Weight)ファイルダウンロード用
 pip install gdown
 ```
+
+###  フィードバック及びお問い合わせ
+
+ツールの利用に関する不具合、フィードバック、または修正のご要望などがございましたら、以下の連絡先までお気軽にお問い合わせください。
+
+* **Email:** kmh40283656@gmail.com
