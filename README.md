@@ -10,7 +10,7 @@
 
 # 핵심 아키텍처 특징
 
-- AI Modeling: 사용자가 유전자 가위를 선택하면 조건문으로 코드를 기우는 대신, PredictorFactory가 가위의 특성(DNA 절단, RNA 타겟팅, 역전사 등)에 맞는 전용 딥러닝 추론 객체를 동적으로 할당하는 객체 지향 디자인 패턴을 적용했습니다.
+- AI Modeling: 사용자가 유전자 가위를 선택하면 조건문으로 코드를 기우는 대신, Predictor가 가위의 특성(DNA 절단, RNA 타겟팅, 역전사 등)에 맞는 전용 딥러닝 추론 객체를 동적으로 할당하는 객체 지향 디자인 패턴을 적용했습니다.
 
 - Multi-Dimensional Optimization for Prime Editing: 초기 효율이 낮은 프라임 에디팅(PE)의 한계를 극복하기 위해, 절단 위치 기준 PBS(10, 13, 15nt)와 RT 템플릿(12, 15, 20nt)의 3x3 가이드 RNA 조합을 자동 생성하고, 트랜스포머(Transformer) 기반 PRIDICT 아키텍처를 통해 최종 스코어링을 수행합니다.
 
