@@ -17,7 +17,32 @@
 
 - **防御的プログラミング（Defensive Programming）：** 入力配列のバリデーション（A, T, G, C以外の例外処理）や、サーバーインフラ内の重み（Weight）ファイルの有無を確認する例外処理ロジックを緻密に実装し、パイプラインの安定性と堅牢性を高めました。
 
-## 実行方法 (How to Run)
+### PREREQUISITE(重要）
+
+本パイプラインのAI予測を正常に動作させるためには、各モデルの事前学習済み重み付け（Weights）ファイルが `weights/` ディレクトリ内に存在している必要があります。
+
+```bash
+# 重み付けファイルを保存するディレクトリを作成し、移動します。
+mkdir -p weights && cd weights
+
+# 1. DeepSpCas9 の重み付け (SpCas9用)
+# 出典: 延世大学 Kim Lab 公式 GitHub
+wget -O DeepSpCas9_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5)"
+
+# 2. DeepCpf1 の重み付け (Cas12a用)
+# 出典: 延世大学 Kim Lab 公式 GitHub
+wget -O DeepCpf1_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5)"
+
+# 3. PRIDICT の重み付け (Prime Editor用)
+# 出典: PRIDICT 公式 Zenodo アーカイブ (原著者の配布リンク)
+# 注意: PRIDICTモデルはファイルサイズが大きいため、ダウンロードに時間がかかる場合があります。
+wget -O PRIDICT_model.pt "[https://zenodo.org/record/8208465/files/pridict_v2_model.pt](https://zenodo.org/record/8208465/files/pridict_v2_model.pt)"
+
+# ダウンロードが完了したら、親ディレクトリに戻ります。
+cd ..
+```
+
+## How to Run
 
 ```bash
 # 1. 環境セットアップ
