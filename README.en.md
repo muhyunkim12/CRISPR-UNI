@@ -38,3 +38,24 @@ python3 main.py
 Select CRISPR type (1-6): 3
 Insert Target DNA Sequence: ATCG...
 >> Starting [PRIDICT Transformer Model] based pegRNA Multi-Dimensional Optimization...
+```
+
+###  Manual Package Installation (Troubleshooting)
+
+Depending on your local workstation environment, `pip install -r requirements.txt` might fail due to dependency conflicts. If this occurs, install the core dependencies first, and then manually install the specific AI frameworks required for your target CRISPR system.
+
+```bash
+# 1. Core Dependencies (Sequence processing & Data manipulation)
+pip install biopython pandas numpy scikit-learn
+
+# 2. For SpCas9, SaCas9, and Cas12a Models (DeepSpCas9, DeepCpf1)
+# Requires TensorFlow for deep learning inference.
+pip install tensorflow keras
+
+# 3. For Prime Editor (PE) Models (PRIDICT)
+# Requires PyTorch and Hugging Face Transformers.
+pip install torch torchvision torchaudio transformers
+
+# 4. Utility for downloading pre-trained weights
+pip install gdown
+```
