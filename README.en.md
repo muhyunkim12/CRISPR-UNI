@@ -84,3 +84,9 @@ pip install torch torchvision torchaudio transformers
 # 4. Utility for downloading pre-trained weights
 pip install gdown
 ```
+
+### Feedback & Support
+
+If you encounter any issues, have feature requests, or would like to provide feedback regarding this tool, please feel free to reach out to the contact below. 
+
+* **Email:** kmh40283656@gmail.com
