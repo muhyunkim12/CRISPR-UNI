@@ -40,7 +40,7 @@ Insert Target DNA Sequence: ATCG...
 >> Starting [PRIDICT Transformer Model] based pegRNA Multi-Dimensional Optimization...
 ```
 
-###  Manual Package Installation (Troubleshooting)
+###  Manual Package Installation
 
 Depending on your local workstation environment, `pip install -r requirements.txt` might fail due to dependency conflicts. If this occurs, install the core dependencies first, and then manually install the specific AI frameworks required for your target CRISPR system.
 
