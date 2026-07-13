@@ -83,7 +83,8 @@ pip install torch torchvision torchaudio transformers
 # 4. 모델 가중치 다운로드 스크립트 실행용
 pip install gdown
 ```
-＃ 피드백
+### 피드백
+
 툴 관련 불편사항이나 피드백 및 수정사항이 있으면 아래 연락처로 연락부탁드립니다.
 * **Email:** kmh40283656@gmail.com
 
