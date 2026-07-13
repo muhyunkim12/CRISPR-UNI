@@ -25,3 +25,16 @@ pip install -r requirements.txt
 
 # 2. Execute Pipeline
 python3 main.py
+```
+
+```Result
+==================================================
+  CRISPR & PE Multi-Model Design Pipeline v1.0
+==================================================
+[1] SpCas9       (PAM: NGG    | Target: DNA)
+[2] Cas12a       (PAM: TTTN   | Target: DNA)
+[3] Prime_Editor (PAM: NGG    | Target: DNA)
+...
+Select CRISPR type (1-6): 3
+Insert Target DNA Sequence: ATCG...
+>> Starting [PRIDICT Transformer Model] based pegRNA Multi-Dimensional Optimization...
