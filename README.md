@@ -37,3 +37,25 @@ python3 main.py
 가위 종류를 선택하세요 (1-6): 3
 타겟 DNA 서열을 입력하세요: ATCG...
 >> [PRIDICT Transformer Model] 기반 pegRNA 최적화 조합 연산을 시작합니다...
+```
+
+### 패키지 수동 설치 가이드 
+
+실험실 서버 환경에 따라 `pip install -r requirements.txt` 실행 시 버전 충돌이나 에러가 발생할 수 있습니다. 이 경우, 파이프라인의 공통 필수 패키지를 먼저 설치한 후, 사용하고자 하는 CRISPR 시스템에 맞춰 AI 딥러닝 프레임워크를 개별 설치해 주세요.
+
+```bash
+# 1. 공통 필수 라이브러리 (서열 처리 및 데이터 연산)
+pip install biopython pandas numpy scikit-learn
+
+# 2. SpCas9, SaCas9, Cas12a 예측 모델용 (DeepSpCas9, DeepCpf1 기반)
+# 텐서플로우(TensorFlow) 연산이 필요합니다.
+pip install tensorflow keras
+
+# 3. Prime Editor (PE) 예측 모델용 (PRIDICT 기반)
+# 파이토치(PyTorch) 및 트랜스포머(Transformers) 연산이 필요합니다.
+pip install torch torchvision torchaudio transformers
+
+# 4. 모델 가중치 다운로드 스크립트 실행용
+pip install gdown
+```
+
