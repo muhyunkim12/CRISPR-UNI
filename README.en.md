@@ -17,6 +17,31 @@ This project is a high-performance CLI pipeline designed for laboratory workstat
 
 - **Defensive Programming:** Pipeline stability is fortified through rigorous exception handling. This includes strict input sequence validation (filtering non-ATGC characters) and verification logic to check the presence of local model weight files within the server infrastructure.
 
+### PREREQUISITE(Important)
+
+For the AI predictions of this pipeline to function correctly, the pre-trained weights for each model must be located in the `weights/` directory. 
+
+```bash
+# Create the directory for weight files and navigate into it.
+mkdir -p weights && cd weights
+
+# 1. DeepSpCas9 Weights (for SpCas9)
+# Source: Yonsei Univ. Kim Lab Official GitHub
+wget -O DeepSpCas9_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5)"
+
+# 2. DeepCpf1 Weights (for Cas12a)
+# Source: Yonsei Univ. Kim Lab Official GitHub
+wget -O DeepCpf1_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5)"
+
+# 3. PRIDICT Weights (for Prime Editor)
+# Source: PRIDICT Official Zenodo Archive (Author's distribution link)
+# Note: The PRIDICT model is large, so the download may take some time.
+wget -O PRIDICT_model.pt "[https://zenodo.org/record/8208465/files/pridict_v2_model.pt](https://zenodo.org/record/8208465/files/pridict_v2_model.pt)"
+
+# Return to the parent directory once the downloads are complete.
+cd ..
+```
+
 ## How to Run
 
 ```bash
