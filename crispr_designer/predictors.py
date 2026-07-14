@@ -8,6 +8,7 @@ Reads real weights from the './weights/' directory.
 
 import abc
 import os
+from typing import Dict
 import numpy as np
 
 # Declare required ML imports at the top
@@ -21,12 +22,11 @@ try:
 except ImportError:
     torch = None
 
-try:
-    from transformers import AutoModel
-except ImportError:
-    AutoModel = None
-
 from .utils import seq_to_onehot
+
+# Shared nucleotide -> index mapping used by every PyTorch-backed predictor below
+# (U maps to the same index as T since sequences are treated as DNA for encoding purposes).
+NUCLEOTIDE_TO_INDEX = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'U': 3}
 
 class ModelWeightsMissingError(FileNotFoundError):
     """
@@ -172,8 +172,7 @@ class PRIDICTPredictor(BasePredictor):
             self.model.eval()
 
         seq = spacer.upper()
-        char_to_idx = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'U': 3}
-        seq_indices = [char_to_idx.get(char, 0) for char in seq]
+        seq_indices = [NUCLEOTIDE_TO_INDEX.get(char, 0) for char in seq]
 
         with torch.no_grad():
             seq_tensor = torch.tensor([seq_indices], dtype=torch.long)
@@ -207,8 +206,7 @@ class Cas13designPredictor(BasePredictor):
             self.model.eval()
 
         seq = spacer.upper()
-        char_to_idx = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'U': 3}
-        seq_indices = [char_to_idx.get(char, 0) for char in seq]
+        seq_indices = [NUCLEOTIDE_TO_INDEX.get(char, 0) for char in seq]
 
         with torch.no_grad():
             seq_tensor = torch.tensor([seq_indices], dtype=torch.long)
@@ -241,8 +239,7 @@ class DeepCas12fPredictor(BasePredictor):
             self.model.eval()
 
         seq = spacer.upper()
-        char_to_idx = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'U': 3}
-        seq_indices = [char_to_idx.get(char, 0) for char in seq]
+        seq_indices = [NUCLEOTIDE_TO_INDEX.get(char, 0) for char in seq]
 
         with torch.no_grad():
             seq_tensor = torch.tensor([seq_indices], dtype=torch.long)
@@ -257,21 +254,36 @@ class PredictorFactory:
     """
     Factory Pattern class to dynamically match active CRISPR systems with their
     dedicated polymorphic Deep Learning Predictors.
+
+    Predictor instances are cached per resolved CRISPR system name. Each BasePredictor
+    lazily loads its (potentially large) model weights into self.model on first use, but
+    that cache is only useful if the same instance is reused across calls - callers that
+    invoke get_predictor() repeatedly in a loop (e.g. once per scan) would otherwise
+    reload the weights from disk every single time.
     """
+    _instance_cache: Dict[str, BasePredictor] = {}
+
     @staticmethod
     def get_predictor(crispr_system: str) -> BasePredictor:
+        cached = PredictorFactory._instance_cache.get(crispr_system)
+        if cached is not None:
+            return cached
+
         system_lower = crispr_system.lower()
         if "spcas9" in system_lower:
-            return DeepSpCas9Predictor()
+            predictor = DeepSpCas9Predictor()
         elif "sacas9" in system_lower:
-            return DeepSaCas9Predictor()
+            predictor = DeepSaCas9Predictor()
         elif "cas12a" in system_lower or "cpf1" in system_lower:
-            return DeepCpf1Predictor()
+            predictor = DeepCpf1Predictor()
         elif "prime_editor" in system_lower or "prime" in system_lower:
-            return PRIDICTPredictor()
+            predictor = PRIDICTPredictor()
         elif "cas13d" in system_lower:
-            return Cas13designPredictor()
+            predictor = Cas13designPredictor()
         elif "cas14a" in system_lower or "cas12f" in system_lower:
-            return DeepCas12fPredictor()
+            predictor = DeepCas12fPredictor()
         else:
-            return DeepSpCas9Predictor()
+            predictor = DeepSpCas9Predictor()
+
+        PredictorFactory._instance_cache[crispr_system] = predictor
+        return predictor

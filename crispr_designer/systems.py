@@ -9,6 +9,7 @@ and sticky-end cleavage metadata.
 
 from typing import Dict, Any, Optional
 from .base import CRISPRSystem
+from .utils import gc_content
 
 # Global CRISPR system registry
 CRISPR_REGISTRY: Dict[str, CRISPRSystem] = {}
@@ -42,6 +43,10 @@ class SpCas9System(CRISPRSystem):
             scoring_method='Azimuth'
         )
 
+    def get_context_window(self) -> Optional[tuple]:
+        # Azimuth scoring uses a 30nt window: 4nt upstream + 20nt spacer + 3nt PAM + 3nt downstream
+        return (4, 3)
+
     def score_candidate(self, spacer: str, target_site: str) -> float:
         """
         Calculates a mock 'Azimuth' on-target activity score based on biological properties:
@@ -57,8 +62,7 @@ class SpCas9System(CRISPRSystem):
         score = 60.0  # Base line score
 
         # 1. GC Content Penalty (ideal GC is 40% - 60% or 0.4 - 0.6)
-        gc_count = sum(1 for b in spacer if b in ('G', 'C'))
-        gc_ratio = gc_count / len(spacer)
+        gc_ratio = gc_content(spacer)
         if 0.4 <= gc_ratio <= 0.6:
             score += 15.0
         elif gc_ratio < 0.3 or gc_ratio > 0.7:
@@ -137,8 +141,7 @@ class Cas12aSystem(CRISPRSystem):
         score = 55.0
 
         # GC ratio (Cas12a prefers slightly AT-richer targets)
-        gc_count = sum(1 for b in spacer if b in ('G', 'C'))
-        gc_ratio = gc_count / len(spacer)
+        gc_ratio = gc_content(spacer)
         if 0.3 <= gc_ratio <= 0.5:
             score += 20.0
         elif gc_ratio > 0.6:
@@ -181,6 +184,10 @@ class PrimeEditorSystem(CRISPRSystem):
             enzyme_variant='PE2/PE3 (nCas9-M-MLV RT)'
         )
 
+    def get_context_window(self) -> Optional[tuple]:
+        # Same 30nt SpCas9-derived scaffold context window (PE2/PE3 nickase retains the NGG PAM geometry)
+        return (4, 3)
+
     def update_prime_parameters(self, pbs_length: int, rt_length: int):
         """
         Allows dynamic updating of the Prime Editing pegRNA parameters.
@@ -221,10 +228,9 @@ class Cas13dSystem(CRISPRSystem):
         
         spacer = spacer.upper()
         score = 70.0
-        
+
         # 1. GC content
-        gc_count = sum(1 for b in spacer if b in ('G', 'C'))
-        gc_ratio = gc_count / len(spacer)
+        gc_ratio = gc_content(spacer)
         if 0.4 <= gc_ratio <= 0.6:
             score += 15.0
         else:

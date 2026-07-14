@@ -7,8 +7,7 @@ Universal CRISPR Guide RNA Design Platform - CRISPR-UNI.
 Powered by Polymorphic Deep Learning Predictors.
 """
 
-import sys
-import random
+import logging
 
 try:
     import readline
@@ -173,6 +172,11 @@ def print_candidates_table(candidates, lang: str = "en", predictor: BasePredicto
     print(f"{strings['total_candidates']}{len(candidates)}")
 
 def main():
+    # Configure logging here at the application entry point (not inside library modules like
+    # organisms.py) so importing crispr_designer as a library never silently overrides a host
+    # application's own logging configuration.
+    logging.basicConfig(level=logging.INFO)
+
     # Print the premium Gemini-style pixel logo for CRISPR-UNI
     print(r"""
        ▄█

@@ -51,6 +51,24 @@ def reverse_complement(sequence: str) -> str:
     }
     return "".join(complement.get(base, base) for base in reversed(sequence))
 
+def gc_content(sequence: str) -> float:
+    """
+    Calculates the GC ratio (0.0 - 1.0) of a nucleotide sequence.
+    Shared helper so scoring functions across CRISPRSystem subclasses don't
+    each reimplement the same GC-counting loop.
+
+    Args:
+        sequence (str): Nucleotide sequence (case-insensitive).
+
+    Returns:
+        float: GC ratio, or 0.0 for an empty sequence.
+    """
+    if not sequence:
+        return 0.0
+    seq = sequence.upper()
+    gc_count = sum(1 for base in seq if base in ('G', 'C'))
+    return gc_count / len(seq)
+
 def iupac_to_regex(pattern: str) -> str:
     """
     Converts a degenerate IUPAC DNA sequence (like a PAM pattern) into a compiled regex string.

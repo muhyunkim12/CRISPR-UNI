@@ -10,7 +10,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 
-from .utils import reverse_complement, iupac_to_regex
+from .utils import reverse_complement, iupac_to_regex, gc_content
 
 class CRISPRSystem(ABC):
     """
@@ -74,19 +74,29 @@ class CRISPRSystem(ABC):
         # Normalize RNA sequence characters (U -> T) to enable standard DNA IUPAC regex scanning
         normalized_seq = sequence.replace('U', 'T').replace('u', 't')
 
+        # System metadata is identical for every candidate produced by this scan, so it's
+        # computed once here and passed down instead of being rebuilt per-candidate.
+        system_metadata = self.get_system_metadata()
+
         # 1. Scan Forward Strand (+)
-        forward_candidates = self._scan_strand(normalized_seq, strand='+', seq_len=seq_len, original_seq=sequence)
+        forward_candidates = self._scan_strand(
+            normalized_seq, strand='+', seq_len=seq_len, original_seq=sequence, system_metadata=system_metadata
+        )
         candidates.extend(forward_candidates)
 
         # 2. Scan Reverse Complement Strand (-) - Bypassed for single-stranded targets (RNA, ssDNA)
         if self.target_type == 'DNA':
             rev_sequence = reverse_complement(normalized_seq)
-            reverse_candidates = self._scan_strand(rev_sequence, strand='-', seq_len=seq_len, original_seq=sequence)
+            reverse_candidates = self._scan_strand(
+                rev_sequence, strand='-', seq_len=seq_len, original_seq=sequence, system_metadata=system_metadata
+            )
             candidates.extend(reverse_candidates)
 
         return candidates
 
-    def _scan_strand(self, target_seq: str, strand: str, seq_len: int, original_seq: str) -> List[Dict[str, Any]]:
+    def _scan_strand(
+        self, target_seq: str, strand: str, seq_len: int, original_seq: str, system_metadata: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Internal scanning helper for a single sequence strand.
         """
@@ -146,11 +156,15 @@ class CRISPRSystem(ABC):
                 final_start = seq_len - strand_end
                 final_end = seq_len - strand_start
 
-            # Calculate 30nt context sequence (4nt upstream + spacer + PAM + 3nt downstream)
+            # Calculate extended context sequence (upstream + spacer + PAM + downstream), used by
+            # some on-target scoring models (e.g. Azimuth). The window size is system-specific,
+            # so it's resolved via get_context_window() instead of being hardcoded here.
             context_seq_30 = None
-            if self.pam_position == '3_prime' and self.spacer_length == 20 and len(pam_match_normalized) == 3:
-                context_start = spacer_start - 4
-                context_end = match_end + 3
+            context_window = self.get_context_window()
+            if context_window is not None and self.pam_position == '3_prime':
+                upstream_len, downstream_len = context_window
+                context_start = spacer_start - upstream_len
+                context_end = match_end + downstream_len
                 if context_start >= 0 and context_end <= len(target_seq):
                     # Slice from target_seq which represents the searched strand (already 5' to 3')
                     context_seq_30 = target_seq[context_start:context_end].upper()
@@ -168,7 +182,7 @@ class CRISPRSystem(ABC):
                 'score': round(score, 3),
                 'system_name': self.name,
                 'context_seq_30': context_seq_30,
-                'metadata': self.get_system_metadata()
+                'metadata': system_metadata
             }
             strand_candidates.append(candidate_info)
 
@@ -189,14 +203,25 @@ class CRISPRSystem(ABC):
         if not spacer:
             return 0.0
         # GC content calculation: standard marker for secondary structure / stability
-        gc_count = sum(1 for base in spacer.upper() if base in ('G', 'C'))
-        gc_content = gc_count / len(spacer)
-        
+        gc_ratio = gc_content(spacer)
+
         # Penalyze extreme GC contents (ideal is 40% - 60%)
         # Returns a normalized score based on GC suitability
-        deviation = abs(gc_content - 0.5)
+        deviation = abs(gc_ratio - 0.5)
         score = max(0.0, 100.0 - (deviation * 150.0))  # Scales ideal GC to 100, extreme GC to lower
         return score
+
+    def get_context_window(self) -> Optional[tuple]:
+        """
+        Returns (upstream_len, downstream_len) nucleotide counts defining the extended
+        context window some on-target scoring models need (e.g. Azimuth's 30nt window
+        for SpCas9: 4nt upstream + 20nt spacer + 3nt PAM + 3nt downstream).
+
+        Returns None by default (no context window). Subclasses whose scoring model
+        needs surrounding context should override this instead of special-casing
+        their spacer/PAM lengths in the generic scanning loop.
+        """
+        return None
 
     def get_system_metadata(self) -> Dict[str, Any]:
         """
