@@ -21,9 +21,11 @@ This project is a high-performance CLI pipeline designed for laboratory workstat
 
 ### PREREQUISITE(Important)
 
-For the AI predictions of this pipeline to function correctly, the pre-trained weights for each model must be located in the `weights/` directory. 
+For the AI predictions of this pipeline to function correctly, the pre-trained weights for each model must be located in the `weights/` directory.
 
-The easiest way is to run the helper script below. It auto-downloads any model with a confirmed source URL and saves it under the exact filename the code expects.
+**You also need the matching deep learning framework installed** (TensorFlow and/or PyTorch, depending on which system you use) - `requirements.txt` does not install these by default since they're heavy and you only need whichever one matches your system. See "Manual Package Installation" further below for exactly which framework each system needs.
+
+The easiest way to get the weight files themselves is to run the helper script below. It auto-downloads any model with a confirmed source URL and saves it under the exact filename the code expects.
 
 ```bash
 python download_weights.py
