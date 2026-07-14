@@ -198,51 +198,6 @@ class PrimeEditorSystem(CRISPRSystem):
         self.extra_metadata['rt_len'] = rt_length
 
 
-@register_system('Cas13d')
-class Cas13dSystem(CRISPRSystem):
-    """
-    Cas13d RNA-targeting CRISPR system.
-    PFS (Protospacer Flanking Site) is typically 'H' (A, C, or U - not G) at the 3' end.
-    Spacer Length: 22 nt
-    Target: RNA (single-stranded)
-    """
-
-    def __init__(self):
-        super().__init__(
-            name='Cas13d',
-            pam='H',  # PFS acts as PAM, 'H' means A, C, or U (not G)
-            spacer_length=22,
-            pam_position='3_prime',
-            scoring_method='RNA_Standard',
-            target_type='RNA'
-        )
-
-    def score_candidate(self, spacer: str, target_site: str) -> float:
-        """
-        Cas13d RNA target scoring:
-        - Prefers moderate GC (40% - 60%).
-        - Avoids poly-G or poly-C stretches which form secondary structures (like hairpins or G-quadruplexes) in RNA.
-        """
-        if not spacer:
-            return 0.0
-        
-        spacer = spacer.upper()
-        score = 70.0
-
-        # 1. GC content
-        gc_ratio = gc_content(spacer)
-        if 0.4 <= gc_ratio <= 0.6:
-            score += 15.0
-        else:
-            score -= 15.0
-
-        # 2. Avoid homopolymeric stretches (e.g., GGGGG or CCCCC)
-        if 'GGGG' in spacer or 'CCCC' in spacer:
-            score -= 20.0
-
-        return max(0.0, min(100.0, score))
-
-
 @register_system('Cas14a(Cas12f)')
 class Cas14aSystem(CRISPRSystem):
     """

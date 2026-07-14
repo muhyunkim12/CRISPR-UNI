@@ -32,3 +32,11 @@ weights/
 *.onnx
 *.ckpt
 *.pb
+
+# Reference genome FASTA files downloaded by prepare_genome.py (too large for Git)
+genomes/
+*.fna
+*.fna.gz
+*.fa
+*.fa.gz
+*.fai

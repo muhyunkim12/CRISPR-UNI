@@ -7,6 +7,7 @@ Universal CRISPR Guide RNA Design Platform - CRISPR-UNI.
 Powered by Polymorphic Deep Learning Predictors.
 """
 
+import argparse
 import logging
 
 try:
@@ -15,14 +16,20 @@ except ImportError:
     pass
 
 from crispr_designer import (
-    CRISPRDesigner, 
-    CRISPRSystem, 
-    CRISPR_REGISTRY, 
+    CRISPRDesigner,
+    CRISPRSystem,
+    CRISPR_REGISTRY,
     ORGANISM_REGISTRY,
     PredictorFactory,
     BasePredictor
 )
 from crispr_designer.predictors import ModelWeightsMissingError
+from crispr_designer.offtarget import (
+    search_offtargets,
+    offtarget_risk_score,
+    CasOffinderNotFoundError,
+    ReferenceGenomeMissingError,
+)
 
 # Multi-language localization dictionary
 LOCALIZATION = {
@@ -46,7 +53,8 @@ LOCALIZATION = {
         
         # Scoring Format
         "score_ai_format": "[{model} Prediction: {score:.2f}]",
-        
+        "score_heuristic_format": "[Heuristic (GC-based) Score: {score:.2f}]",
+
         "results_title": "Analysis Results",
         "target_genome": "  - Target Genome: ",
         "crispr_engine": "  - CRISPR Engine: ",
@@ -58,10 +66,15 @@ LOCALIZATION = {
         "table_pam": "PAM",
         "table_spacer": "Spacer Sequence (5'->3')",
         "table_score": "Score Column (Auto AI Model)",
+        "table_offtarget": "Off-target Risk",
         "total_candidates": "  Total Candidates: ",
         "scan_success": "\n  [+] Scan completed successfully. Returning to the first step...\n",
         "exiting": "\n  [!] Exiting the program. Thank you!",
-        "no_candidates": "  [!] No guide RNA candidates found matching the criteria."
+        "no_candidates": "  [!] No guide RNA candidates found matching the criteria.",
+        "offtarget_checking": "  Checking off-targets against the local reference genome (this may take a while)...",
+        "offtarget_tool_missing": "  [!] Off-target check skipped: Cas-OFFinder is not installed.",
+        "offtarget_genome_missing": "  [!] Off-target check skipped: no local reference genome for '{organism}'. Run: python prepare_genome.py {organism}",
+        "offtarget_failed": "  [!] Off-target check failed: {error}"
     },
     "ko": {
         "title_bar": "CRISPR-UNI 유전자 가위 대화형 디자인 툴",
@@ -83,7 +96,8 @@ LOCALIZATION = {
         
         # Scoring Format
         "score_ai_format": "[{model} 모델 예측 점수: {score:.2f}]",
-        
+        "score_heuristic_format": "[근사치(GC 기반) 점수: {score:.2f}]",
+
         "results_title": "분석 결과",
         "target_genome": "  - 대상 유전체: ",
         "crispr_engine": "  - 분석 도구: ",
@@ -95,10 +109,15 @@ LOCALIZATION = {
         "table_pam": "PAM/PFS",
         "table_spacer": "스페이서 서열 (5'->3')",
         "table_score": "점수 항목 (자동 AI 모델)",
+        "table_offtarget": "오프타깃 위험도",
         "total_candidates": "  총 후보 개수: ",
         "scan_success": "\n  [+] 스캔이 성공적으로 완료되었습니다. 첫 번째 단계로 돌아갑니다.\n",
         "exiting": "\n  [!] 프로그램을 종료합니다. 감사합니다!",
-        "no_candidates": "  [!] 해당 조건에 부합하는 가이드 RNA 후보를 찾지 못했습니다."
+        "no_candidates": "  [!] 해당 조건에 부합하는 가이드 RNA 후보를 찾지 못했습니다.",
+        "offtarget_checking": "  로컬 참조 게놈을 대상으로 오프타깃을 확인하는 중입니다 (시간이 걸릴 수 있습니다)...",
+        "offtarget_tool_missing": "  [!] 오프타깃 검사를 건너뜁니다: Cas-OFFinder가 설치되어 있지 않습니다.",
+        "offtarget_genome_missing": "  [!] 오프타깃 검사를 건너뜁니다: '{organism}'의 로컬 참조 게놈이 없습니다. 실행: python prepare_genome.py {organism}",
+        "offtarget_failed": "  [!] 오프타깃 검사 실패: {error}"
     },
     "ja": {
         "title_bar": "CRISPR-UNI ゲノム編集対話型ツール",
@@ -120,7 +139,8 @@ LOCALIZATION = {
         
         # Scoring Format
         "score_ai_format": "[{model} 予測スコア: {score:.2f}]",
-        
+        "score_heuristic_format": "[近似値(GCベース)スコア: {score:.2f}]",
+
         "results_title": "分析結果",
         "target_genome": "  - 対象ゲノム: ",
         "crispr_engine": "  - 分析エンジン: ",
@@ -132,10 +152,15 @@ LOCALIZATION = {
         "table_pam": "PAM/PFS",
         "table_spacer": "スペーサー配列 (5'->3')",
         "table_score": "スコア項目 (自動 AI モデル)",
+        "table_offtarget": "オフターゲットリスク",
         "total_candidates": "  候補総数: ",
         "scan_success": "\n  [+] スキャンが正常に完了しました。最初のステップに戻ります。\n",
         "exiting": "\n  [!] プログラムを終了します。ありがとうございました！",
-        "no_candidates": "  [!] 条件に一致するガイドRNA候補が見つかりませんでした。"
+        "no_candidates": "  [!] 条件に一致するガイドRNA候補が見つかりませんでした。",
+        "offtarget_checking": "  ローカルの参照ゲノムに対してオフターゲットを確認しています(時間がかかる場合があります)...",
+        "offtarget_tool_missing": "  [!] オフターゲット確認をスキップします: Cas-OFFinderがインストールされていません。",
+        "offtarget_genome_missing": "  [!] オフターゲット確認をスキップします: '{organism}'のローカル参照ゲノムがありません。実行: python prepare_genome.py {organism}",
+        "offtarget_failed": "  [!] オフターゲット確認に失敗しました: {error}"
     }
 }
 
@@ -145,12 +170,12 @@ def print_separator(title: str = ""):
     else:
         print(f"\n{'='*70}")
 
-def print_candidates_table(candidates, lang: str = "en", predictor: BasePredictor = None):
+def print_candidates_table(candidates, lang: str = "en", predictor: BasePredictor = None, show_offtarget: bool = False):
     strings = LOCALIZATION[lang]
     if not candidates:
         print(f"  {strings['no_candidates']}")
         return
-        
+
     no = strings["table_no"]
     strand = strings["table_strand"]
     start = strings["table_start"]
@@ -158,20 +183,53 @@ def print_candidates_table(candidates, lang: str = "en", predictor: BasePredicto
     pam = strings["table_pam"]
     spacer = strings["table_spacer"]
     score_col = strings["table_score"]
-    
-    print(f"  {no:<4} {strand:<6} {start:<6} {end:<5} {pam:<8} {spacer:<25} {score_col:<35}")
-    print(f"  {'-'*95}")
+    offtarget_col = strings["table_offtarget"]
+
+    offtarget_col_width = 30
+    header = f"  {no:<4} {strand:<6} {start:<6} {end:<5} {pam:<8} {spacer:<25} {score_col:<35}"
+    if show_offtarget:
+        header += f" {offtarget_col:<{offtarget_col_width}}"
+    print(header)
+    total_width = 95 if not show_offtarget else 95 + offtarget_col_width + 1
+    print(f"  {'-'*total_width}")
     for idx, cand in enumerate(candidates, 1):
-        if cand['score'] == "N/A":
+        if predictor is None:
+            # No real deep learning model exists for this system - the score is the
+            # base heuristic (GC-content based) one computed at scan time in base.py.
+            score_str = strings["score_heuristic_format"].format(score=cand['score'])
+        elif cand['score'] == "N/A":
             score_str = f"[{predictor.model_name} Score: N/A]"
         else:
             score_str = strings["score_ai_format"].format(model=predictor.model_name, score=cand['score'])
-            
-        print(f"  {idx:<4} {cand['strand']:<6} {cand['start']:<6} {cand['end']:<5} {cand['pam']:<8} {cand['spacer']:<25} {score_str:<35}")
-    print(f"  {'-'*95}")
+
+        row = f"  {idx:<4} {cand['strand']:<6} {cand['start']:<6} {cand['end']:<5} {cand['pam']:<8} {cand['spacer']:<25} {score_str:<35}"
+        if show_offtarget:
+            offtarget_str = cand.get('offtarget_summary', 'N/A')
+            row += f" {offtarget_str:<{offtarget_col_width}}"
+        print(row)
+    print(f"  {'-'*total_width}")
     print(f"{strings['total_candidates']}{len(candidates)}")
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="CRISPR-UNI interactive guide RNA design tool."
+    )
+    parser.add_argument(
+        "--check-offtargets", action="store_true",
+        help="Also search each guide candidate against the organism's local reference genome "
+             "for off-target matches (requires Cas-OFFinder + `python prepare_genome.py <organism>` "
+             "to have been run beforehand; see README)."
+    )
+    parser.add_argument(
+        "--max-mismatches", type=int, default=3,
+        help="Maximum mismatches to tolerate when searching for off-targets (default: 3)."
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+
     # Configure logging here at the application entry point (not inside library modules like
     # organisms.py) so importing crispr_designer as a library never silently overrides a host
     # application's own logging configuration.
@@ -321,49 +379,90 @@ def main():
         # Perform Guide RNA Scan
         candidates = designer.find_candidates(cleaned_sequence)
         
-        # Polymorphically predict efficiency for each guide RNA candidate
+        # Polymorphically predict efficiency for each guide RNA candidate.
+        # predictor is None for systems with no real, publicly available deep learning
+        # model (see PredictorFactory) - in that case cand['score'] is left untouched,
+        # already holding the heuristic (GC-content based) score computed at scan time
+        # by the system's score_candidate() (see base.py / systems.py).
         weights_missing_notified = False
-        for cand in candidates:
-            kwargs = {}
-            if selected_system == 'Prime_Editor':
-                # Prime editor needs PBS and RT template length bounds
-                kwargs['pbs_len'] = getattr(sys_instance, 'pbs_length', 13)
-                kwargs['rt_len'] = getattr(sys_instance, 'rt_length', 15)
-            elif selected_system == 'Cas13d':
-                # Cas13d RNA models evaluates Protospacer Flanking Site (PFS)
-                kwargs['PFS'] = cand['pam']
-            else:
-                # DNA models evaluates standard seed double-strand break (DSB) parameters
-                kwargs['target_site'] = cand['target_site']
-                
+        if predictor is not None:
+            for cand in candidates:
+                kwargs = {}
+                if selected_system == 'Prime_Editor':
+                    # Prime editor needs PBS and RT template length bounds
+                    kwargs['pbs_len'] = getattr(sys_instance, 'pbs_length', 13)
+                    kwargs['rt_len'] = getattr(sys_instance, 'rt_length', 15)
+                else:
+                    # DNA models evaluates standard seed double-strand break (DSB) parameters
+                    kwargs['target_site'] = cand['target_site']
+
+                try:
+                    # Calculate scores via the concrete deep learning model
+                    cand["score"] = predictor.predict_efficiency(spacer=cand['spacer'], **kwargs)
+                except Exception as e:
+                    if isinstance(e, ModelWeightsMissingError):
+                        if not weights_missing_notified:
+                            file_name = getattr(e, 'missing_file', predictor.weight_file)
+                            dl_url = getattr(e, 'download_url', predictor.download_url)
+                            if lang == "ko":
+                                print(f"\n  ❌ [{predictor.model_name}] 가중치 파일이 없습니다. 경로를 확인하세요.")
+                                print(f"      다운로드 링크: {dl_url}\n")
+                            elif lang == "ja":
+                                print(f"\n  ❌ [{predictor.model_name}] 重みファイルがありません。パスを確認してください。")
+                                print(f"      ダウンロードリンク: {dl_url}\n")
+                            else:
+                                print(f"\n  ❌ [{predictor.model_name}] Weights file is missing. Please verify path.")
+                                print(f"      Download Link: {dl_url}\n")
+                            weights_missing_notified = True
+                    cand["score"] = "N/A"
+
+        # Optional off-target search against the organism's local reference genome (see
+        # prepare_genome.py). This is opt-in via --check-offtargets because it needs a
+        # multi-GB genome file prepared ahead of time and an external Cas-OFFinder install -
+        # neither of which the fast default on-target-only flow requires.
+        offtarget_enabled = False
+        if args.check_offtargets and candidates:
+            print(strings["offtarget_checking"])
             try:
-                # Calculate scores via the concrete deep learning model
-                cand["score"] = predictor.predict_efficiency(spacer=cand['spacer'], **kwargs)
+                hits_by_site = search_offtargets(
+                    candidates,
+                    organism_name=selected_organism,
+                    spacer_length=sys_instance.spacer_length,
+                    pam=sys_instance.pam,
+                    pam_position=sys_instance.pam_position,
+                    max_mismatches=args.max_mismatches,
+                )
+                for cand in candidates:
+                    hits = hits_by_site.get(cand['target_site'].upper(), [])
+                    result = offtarget_risk_score(
+                        hits,
+                        guide_spacer=cand['spacer'],
+                        spacer_length=sys_instance.spacer_length,
+                        pam_position=sys_instance.pam_position,
+                    )
+                    cand['offtarget_hits'] = len(hits)
+                    cand['offtarget_score'] = result['score']
+                    cand['offtarget_method'] = result['method']
+                    # 'CFD' = real Doench et al. 2016 score (SpCas9/Prime_Editor); 'SaCas9-specificity'
+                    # = real Tycko et al. 2018 score (SaCas9); 'heuristic' = rough mismatch-count
+                    # approximation used when neither real model applies (see offtarget.py).
+                    cand['offtarget_summary'] = f"{result['score']:.0f}/100 {result['method']} ({len(hits)} hits)"
+                offtarget_enabled = True
+            except CasOffinderNotFoundError:
+                print(strings["offtarget_tool_missing"])
+            except ReferenceGenomeMissingError:
+                print(strings["offtarget_genome_missing"].format(organism=selected_organism))
             except Exception as e:
-                if isinstance(e, ModelWeightsMissingError):
-                    if not weights_missing_notified:
-                        file_name = getattr(e, 'missing_file', predictor.weight_file)
-                        dl_url = getattr(e, 'download_url', predictor.download_url)
-                        if lang == "ko":
-                            print(f"\n  ❌ [{predictor.model_name}] 가중치 파일이 없습니다. 경로를 확인하세요.")
-                            print(f"      다운로드 링크: {dl_url}\n")
-                        elif lang == "ja":
-                            print(f"\n  ❌ [{predictor.model_name}] 重みファイルがありません。パスを確認してください。")
-                            print(f"      ダウンロードリンク: {dl_url}\n")
-                        else:
-                            print(f"\n  ❌ [{predictor.model_name}] Weights file is missing. Please verify path.")
-                            print(f"      Download Link: {dl_url}\n")
-                        weights_missing_notified = True
-                cand["score"] = "N/A"
-        
+                print(strings["offtarget_failed"].format(error=e))
+
         # Display analysis progress
         print_separator(strings["results_title"])
         print(f"{strings['target_genome']}{designer.organism_name} ({designer.organism_metadata['ref_assembly']})")
         print(f"{strings['crispr_engine']}{designer.active_system.name} (PAM/PFS: {designer.active_system.pam}{strings['target_substrate']}{getattr(designer.active_system, 'target_type', 'DNA')})")
         print()
-        
+
         # Print table
-        print_candidates_table(candidates, lang, predictor)
+        print_candidates_table(candidates, lang, predictor, show_offtarget=offtarget_enabled)
         print(strings["scan_success"])
 
 if __name__ == "__main__":

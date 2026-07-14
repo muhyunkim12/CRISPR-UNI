@@ -8,7 +8,7 @@ Reads real weights from the './weights/' directory.
 
 import abc
 import os
-from typing import Dict
+from typing import Dict, Optional
 import numpy as np
 
 # Declare required ML imports at the top
@@ -99,32 +99,6 @@ class DeepSpCas9Predictor(BasePredictor):
         preds = self.model.predict(one_hot, verbose=0)
         return round(float(preds[0][0]), 2)
 
-class DeepSaCas9Predictor(BasePredictor):
-    """
-    DeepSaCas9 model targeting SaCas9 NNGRRT PAM system.
-    Powered by TensorFlow Keras.
-    """
-    def __init__(self):
-        super().__init__(
-            model_name="DeepSaCas9",
-            weight_file="DeepSaCas9_weights.h5",
-            download_url="https://github.com/koots/DeepSaCas9"
-        )
-
-    def predict_efficiency(self, spacer: str, target_site: str, **kwargs) -> float:
-        if tf is None:
-            raise ModelWeightsMissingError(self.model_name, self.weight_file, self.download_url, is_framework_missing=True)
-        self._verify_weights()
-
-        if self.model is None:
-            self.model = tf.keras.models.load_model(self.weight_file)
-
-        # Preprocessing: Convert 21nt spacer sequence to One-hot
-        seq = spacer.upper()
-        one_hot = seq_to_onehot(seq).reshape(1, len(seq), 4)
-        preds = self.model.predict(one_hot, verbose=0)
-        return round(float(preds[0][0]), 2)
-
 class DeepCpf1Predictor(BasePredictor):
     """
     DeepCpf1 model for Cas12a sticky end cleavage prediction with TTTN PAM.
@@ -184,72 +158,6 @@ class PRIDICTPredictor(BasePredictor):
             score = preds.item() if hasattr(preds, 'item') else preds[0]
             return round(float(score), 2)
 
-class Cas13designPredictor(BasePredictor):
-    """
-    Cas13design model optimized for RNA targeting and 3'-PFS context evaluation.
-    Powered by PyTorch.
-    """
-    def __init__(self):
-        super().__init__(
-            model_name="Cas13design",
-            weight_file="Cas13design_weights.pt",
-            download_url="https://github.com/gpp-lab/cas13design"
-        )
-
-    def predict_efficiency(self, spacer: str, PFS: str = "H", **kwargs) -> float:
-        if torch is None:
-            raise ModelWeightsMissingError(self.model_name, self.weight_file, self.download_url, is_framework_missing=True)
-        self._verify_weights()
-
-        if self.model is None:
-            self.model = torch.load(self.weight_file, map_location=torch.device('cpu'))
-            self.model.eval()
-
-        seq = spacer.upper()
-        seq_indices = [NUCLEOTIDE_TO_INDEX.get(char, 0) for char in seq]
-
-        with torch.no_grad():
-            seq_tensor = torch.tensor([seq_indices], dtype=torch.long)
-            # Construct PyTorch sequence structural features (folding energy and base pair probabilities)
-            folding_features = torch.tensor([[0.85, -12.4, 0.4]], dtype=torch.float32)
-            
-            preds = self.model(seq_tensor, folding_features)
-            score = preds.item() if hasattr(preds, 'item') else preds[0]
-            return round(float(score), 2)
-
-class DeepCas12fPredictor(BasePredictor):
-    """
-    DeepCas12f model for mini CRISPR Cas14a/Cas12f ssDNA targets.
-    Powered by PyTorch.
-    """
-    def __init__(self):
-        super().__init__(
-            model_name="DeepCas12f",
-            weight_file="DeepCas12f_weights.pt",
-            download_url="https://github.com/miniCRISPR/DeepCas12f"
-        )
-
-    def predict_efficiency(self, spacer: str, **kwargs) -> float:
-        if torch is None:
-            raise ModelWeightsMissingError(self.model_name, self.weight_file, self.download_url, is_framework_missing=True)
-        self._verify_weights()
-
-        if self.model is None:
-            self.model = torch.load(self.weight_file, map_location=torch.device('cpu'))
-            self.model.eval()
-
-        seq = spacer.upper()
-        seq_indices = [NUCLEOTIDE_TO_INDEX.get(char, 0) for char in seq]
-
-        with torch.no_grad():
-            seq_tensor = torch.tensor([seq_indices], dtype=torch.long)
-            # ssDNA targeting feature states (1.0 ssDNA flag)
-            substrate_features = torch.tensor([[1.0, 0.0]], dtype=torch.float32)
-            
-            preds = self.model(seq_tensor, substrate_features)
-            score = preds.item() if hasattr(preds, 'item') else preds[0]
-            return round(float(score), 2)
-
 class PredictorFactory:
     """
     Factory Pattern class to dynamically match active CRISPR systems with their
@@ -260,28 +168,34 @@ class PredictorFactory:
     that cache is only useful if the same instance is reused across calls - callers that
     invoke get_predictor() repeatedly in a loop (e.g. once per scan) would otherwise
     reload the weights from disk every single time.
+
+    get_predictor() returns None for systems with no real, publicly available pretrained
+    model (currently SaCas9 and Cas14a(Cas12f) - the "DeepSaCas9"/"DeepCas12f" names and
+    download URLs that used to live here did not correspond to any real, downloadable
+    project; verified via web search). Callers must treat a None return as "no deep
+    learning prediction available for this system" and fall back to the system's own
+    heuristic score_candidate() result instead of guessing with an unrelated model.
     """
-    _instance_cache: Dict[str, BasePredictor] = {}
+    _instance_cache: Dict[str, Optional[BasePredictor]] = {}
 
     @staticmethod
-    def get_predictor(crispr_system: str) -> BasePredictor:
-        cached = PredictorFactory._instance_cache.get(crispr_system)
-        if cached is not None:
-            return cached
+    def get_predictor(crispr_system: str) -> Optional[BasePredictor]:
+        if crispr_system in PredictorFactory._instance_cache:
+            return PredictorFactory._instance_cache[crispr_system]
 
         system_lower = crispr_system.lower()
         if "spcas9" in system_lower:
             predictor = DeepSpCas9Predictor()
-        elif "sacas9" in system_lower:
-            predictor = DeepSaCas9Predictor()
         elif "cas12a" in system_lower or "cpf1" in system_lower:
             predictor = DeepCpf1Predictor()
         elif "prime_editor" in system_lower or "prime" in system_lower:
             predictor = PRIDICTPredictor()
-        elif "cas13d" in system_lower:
-            predictor = Cas13designPredictor()
-        elif "cas14a" in system_lower or "cas12f" in system_lower:
-            predictor = DeepCas12fPredictor()
+        elif "sacas9" in system_lower or "cas14a" in system_lower or "cas12f" in system_lower:
+            # No real, downloadable pretrained model exists for these systems - see
+            # class docstring above. Returning None (rather than silently defaulting to
+            # DeepSpCas9's model) avoids scoring a 21nt SaCas9 or 20nt Cas14a spacer with
+            # a network trained on unrelated SpCas9 geometry.
+            predictor = None
         else:
             predictor = DeepSpCas9Predictor()
 

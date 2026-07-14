@@ -1,0 +1,19 @@
+# Core dependency - required for every CRISPR system (used for one-hot sequence encoding
+# in crispr_designer/utils.py and crispr_designer/predictors.py).
+numpy>=1.21
+
+# --- Optional: deep learning frameworks, needed only if you actually want real predictions
+# from a given system's predictor (crispr_designer/predictors.py already handles either
+# framework being absent - it raises ModelWeightsMissingError with a clear message instead
+# of crashing, so you only need to install the one(s) you plan to use).
+#
+# Required for: SpCas9 (DeepSpCas9), Cas12a (DeepCpf1)
+# tensorflow>=2.10
+#
+# Required for: Prime_Editor (PRIDICT)
+# torch>=2.0
+#
+# Note: SaCas9 and Cas14a(Cas12f) have no deep learning predictor - no public,
+# downloadable pretrained model could be found for either. Both systems still work
+# for guide-finding; their "score" column is the heuristic (GC-content based) fallback,
+# not an AI prediction.

@@ -7,6 +7,7 @@ genomic sequence fetching (with high-fidelity local mock support).
 """
 
 from typing import Dict, Any, Optional, List
+import os
 import urllib.request
 import json
 import logging
@@ -83,7 +84,11 @@ _ORGANISM_DATA: List[Dict[str, Any]] = [
         }
     },
     {
-        'aliases': ['효모', 'Saccharomyces cerevisiae'],
+        # 'Yeast' (plain common_name_en) is included as its own alias because main.py's
+        # organism selection menu and prepare_genome.py both refer to this organism by its
+        # common_name_en - without this, looking it up by that name would raise KeyError
+        # even though 'Saccharomyces cerevisiae' and '효모' work fine.
+        'aliases': ['효모', 'Saccharomyces cerevisiae', 'Yeast'],
         'common_name_en': 'Yeast',
         'scientific_name': 'Saccharomyces cerevisiae',
         'ref_assembly': 'sacCer3',
@@ -98,7 +103,9 @@ _ORGANISM_DATA: List[Dict[str, Any]] = [
         }
     },
     {
-        'aliases': ['대장균', 'E. coli'],
+        # 'Ecoli' (common_name_en, no period) is included alongside 'E. coli' for the same
+        # reason as 'Yeast' above - prepare_genome.py refers to organisms by common_name_en.
+        'aliases': ['대장균', 'E. coli', 'Ecoli'],
         'common_name_en': 'Ecoli',
         'scientific_name': 'Escherichia coli',
         'ref_assembly': 'K-12',
@@ -117,7 +124,7 @@ for _entry in _ORGANISM_DATA:
     for _alias in _aliases:
         ORGANISM_REGISTRY[_alias] = _metadata
 
-# High-fidelity biological mock sequences for testing offline (contains exact Cas9/Cas12a/Cas13d targets)
+# High-fidelity biological mock sequences for testing offline (contains exact Cas9/Cas12a targets)
 MOCK_GENOMIC_DB = {
     'Human': {
         '1': "ATGCGATCGATCGATCGATCGATCGATCGAATCGATCGATCGATCGGGCATCGATCGATCGATCGGGATCGATCGATCGAATTTGATCGATCGATCGATCGGGCATCGATCGATCGATCG",
@@ -141,6 +148,61 @@ MOCK_GENOMIC_DB = {
         '1': "ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG"
     }
 }
+
+# NCBI RefSeq whole-genome assembly accessions, one representative/canonical assembly per
+# organism (keyed by common_name_en, matching ORGANISM_REGISTRY's 'common_name_en' field).
+# These are used by prepare_genome.py to download a full local reference genome (for
+# off-target search / whole-chromosome work) via the NCBI `datasets` CLI tool, as opposed to
+# the small on-demand region fetches below which go through the Ensembl REST API.
+# Verified against NCBI Datasets (https://www.ncbi.nlm.nih.gov/datasets/genome/) as of 2026-07.
+REFERENCE_GENOME_ACCESSIONS: Dict[str, str] = {
+    'Human': 'GCF_000001405.40',   # GRCh38.p14
+    'Mouse': 'GCF_000001635.27',   # GRCm39
+    'Rice': 'GCF_001433935.1',     # IRGSP-1.0
+    'Arabidopsis': 'GCF_000001735.4',  # TAIR10.1
+    'Yeast': 'GCF_000146045.2',    # R64
+    'Ecoli': 'GCF_000005845.2',    # ASM584v2 (K-12 MG1655)
+}
+
+
+GENOME_DIR = "genomes"
+
+
+def get_local_genome_dir(organism_name: str) -> str:
+    """
+    Directory that should contain the local reference genome FASTA for this organism (see
+    prepare_genome.py). Kept one subdirectory per organism (rather than one flat folder for
+    all organisms) because off-target search tools like Cas-OFFinder scan every FASTA file in
+    a given directory - if every organism's genome sat in the same folder, a search for one
+    organism would also match against every other organism's sequence.
+    """
+    metadata = get_organism_metadata(organism_name)
+    common_en = metadata['common_name_en']
+    return os.path.join(GENOME_DIR, common_en)
+
+
+def get_local_genome_path(organism_name: str) -> str:
+    """Expected path to the organism's downloaded whole-genome FASTA file itself."""
+    metadata = get_organism_metadata(organism_name)
+    common_en = metadata['common_name_en']
+    return os.path.join(get_local_genome_dir(organism_name), f"{common_en}.fna")
+
+
+def get_reference_genome_accession(organism_name: str) -> str:
+    """
+    Resolves an organism name (any registered alias, e.g. '벼' or 'Rice') to its canonical
+    NCBI RefSeq whole-genome assembly accession, for use with prepare_genome.py / the NCBI
+    `datasets` CLI tool.
+    """
+    metadata = get_organism_metadata(organism_name)
+    common_en = metadata['common_name_en']
+    if common_en not in REFERENCE_GENOME_ACCESSIONS:
+        raise KeyError(
+            f"No reference genome accession configured for '{organism_name}' ({common_en}). "
+            f"Configured organisms: {list(REFERENCE_GENOME_ACCESSIONS.keys())}"
+        )
+    return REFERENCE_GENOME_ACCESSIONS[common_en]
+
 
 def get_organism_metadata(name: str) -> Dict[str, Any]:
     """

@@ -96,25 +96,6 @@ class TestCRISPRSystems(unittest.TestCase):
         self.assertEqual(cand['start'], 0)
         self.assertEqual(cand['end'], 27)
 
-    def test_cas13d_scanning(self):
-        from crispr_designer import Cas13dSystem
-        system = Cas13dSystem()
-        self.assertEqual(system.target_type, "RNA")
-        
-        # Cas13d RNA target: 22nt spacer + 1nt PFS ('H' = A, C, or U/T - not G)
-        # Sequence: 22nt 'AUCGAUCGAUCGAUCGAUCGAU' + 'GGC' (where only final 'C' matches H)
-        seq = "AUCGAUCGAUCGAUCGAUCGAUGGC"
-        candidates = system.find_candidates(seq)
-        
-        # Verify candidate found & preserved original RNA 'U' bases!
-        self.assertEqual(len(candidates), 1)
-        cand = candidates[0]
-        self.assertEqual(cand['strand'], '+')
-        self.assertEqual(cand['spacer'], "CGAUCGAUCGAUCGAUCGAUGG")
-        self.assertEqual(cand['pam'], "C")
-        self.assertEqual(cand['start'], 2)
-        self.assertEqual(cand['end'], 25)
-
     def test_cas14a_scanning(self):
         from crispr_designer import Cas14aSystem
         system = Cas14aSystem()
@@ -212,26 +193,19 @@ class TestDeepPredictors(unittest.TestCase):
         pred_sp = PredictorFactory.get_predictor("SpCas9")
         self.assertEqual(pred_sp.model_name, "DeepSpCas9")
         
-        # Test SaCas9 matching
-        pred_sa = PredictorFactory.get_predictor("SaCas9")
-        self.assertEqual(pred_sa.model_name, "DeepSaCas9")
-        
         # Test Cas12a matching
         pred_cpf1 = PredictorFactory.get_predictor("Cas12a")
         self.assertEqual(pred_cpf1.model_name, "DeepCpf1")
-        
+
         # Test Prime Editor matching
         pred_pri = PredictorFactory.get_predictor("Prime_Editor")
         self.assertEqual(pred_pri.model_name, "PRIDICT")
-        
-        # Test Cas13d matching
-        pred_cas13 = PredictorFactory.get_predictor("Cas13d")
-        self.assertEqual(pred_cas13.model_name, "Cas13design")
-        
-        # Test Cas14a matching
-        pred_cas12f = PredictorFactory.get_predictor("Cas14a(Cas12f)")
-        self.assertEqual(pred_cas12f.model_name, "DeepCas12f")
-        
+
+        # SaCas9 and Cas14a(Cas12f) have no real, publicly available pretrained model -
+        # the factory returns None rather than guessing with an unrelated model.
+        self.assertIsNone(PredictorFactory.get_predictor("SaCas9"))
+        self.assertIsNone(PredictorFactory.get_predictor("Cas14a(Cas12f)"))
+
     def test_polymorphic_prediction_scores(self):
         from crispr_designer import PredictorFactory
         from crispr_designer.predictors import ModelWeightsMissingError
@@ -249,13 +223,39 @@ class TestDeepPredictors(unittest.TestCase):
             pred_pri.predict_efficiency(spacer="ATCGATCGATCGATCGATCG", pbs_len=13, rt_len=15)
         self.assertEqual(ctx.exception.missing_file, os.path.join("weights", "PRIDICT_model.pt"))
         self.assertEqual(ctx.exception.download_url, "https://github.com/allencellmodeling/pridict")
-        
-        # Test Cas13design RNA target raises ModelWeightsMissingError due to missing weights
-        pred_cas13 = PredictorFactory.get_predictor("Cas13d")
-        with self.assertRaises(ModelWeightsMissingError) as ctx:
-            pred_cas13.predict_efficiency(spacer="AUCGAUCGAUCGAUCGAUCGAU", PFS="C")
-        self.assertEqual(ctx.exception.missing_file, os.path.join("weights", "Cas13design_weights.pt"))
-        self.assertEqual(ctx.exception.download_url, "https://github.com/gpp-lab/cas13design")
+
+
+class TestSaCas9SpecificityScore(unittest.TestCase):
+    """
+    Tests calc_sacas9_score against known values from the real, published SaCas9
+    specificity model table (Tycko et al. 2018; see crispr_designer/sacas9_scores.py).
+    """
+    def test_perfect_match_scores_one(self):
+        from crispr_designer import calc_sacas9_score
+        guide = "A" * 21
+        self.assertEqual(calc_sacas9_score(guide, guide), 1.0)
+
+    def test_position_one_mismatch_is_ignored(self):
+        from crispr_designer import calc_sacas9_score
+        guide = "A" * 21
+        # Mismatch only at the 5'-most position (position 1) - the model explicitly does not
+        # score this position, so it should be treated as if there were no mismatch at all.
+        hit = "C" + "A" * 20
+        self.assertEqual(calc_sacas9_score(guide, hit), 1.0)
+
+    def test_single_mismatch_matches_table_value(self):
+        from crispr_designer import calc_sacas9_score
+        from crispr_designer.sacas9_scores import SACAS9_MISMATCH_SCORES
+        guide = "A" * 21
+        # Mismatch at position 5 (1-indexed): hit has 'C' where guide has 'A'.
+        hit = "A" * 4 + "C" + "A" * 16
+        expected = SACAS9_MISMATCH_SCORES['CA,5']
+        self.assertAlmostEqual(calc_sacas9_score(guide, hit), expected)
+
+    def test_wrong_length_returns_none(self):
+        from crispr_designer import calc_sacas9_score
+        self.assertIsNone(calc_sacas9_score("A" * 20, "A" * 20))
+        self.assertIsNone(calc_sacas9_score("A" * 21, "A" * 20))
 
 
 if __name__ == "__main__":

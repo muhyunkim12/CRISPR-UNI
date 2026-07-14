@@ -1,7 +1,7 @@
 <div align="right">
   <a href="README.md">🇰🇷 한국어</a> | 
   <a href="README.en.md">🇺🇸 English</a> | 
-  <a href="README.ja.md">🇯🇵 日本語</a>
+  <a href="README.jp.md">🇯🇵 日本語</a>
 </div>
 
 # CRISPR-UNI 
@@ -17,9 +17,19 @@ This project is a high-performance CLI pipeline designed for laboratory workstat
 
 - **Defensive Programming:** Pipeline stability is fortified through rigorous exception handling. This includes strict input sequence validation (filtering non-ATGC characters) and verification logic to check the presence of local model weight files within the server infrastructure.
 
+- **Off-target Analysis (optional):** Integrates [Cas-OFFinder](https://github.com/snugel/cas-offinder) against a locally prepared reference genome to check how closely each guide candidate matches other locations in the genome. See the "Off-target Analysis" section below for setup.
+
 ### PREREQUISITE(Important)
 
 For the AI predictions of this pipeline to function correctly, the pre-trained weights for each model must be located in the `weights/` directory. 
+
+The easiest way is to run the helper script below. It auto-downloads any model with a confirmed source URL and saves it under the exact filename the code expects.
+
+```bash
+python download_weights.py
+```
+
+To fetch them manually instead, use the commands below. Note: the filename after `-O` matters - it must match what the code expects, which differs from the upstream source's own filename.
 
 ```bash
 # Create the directory for weight files and navigate into it.
@@ -27,20 +37,58 @@ mkdir -p weights && cd weights
 
 # 1. DeepSpCas9 Weights (for SpCas9)
 # Source: Yonsei Univ. Kim Lab Official GitHub
-wget -O DeepSpCas9_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5)"
+wget -O DeepSpCas9_weights.h5 "https://raw.githubusercontent.com/myungjinkim/DeepSpCas9/master/DeepSpCas9_model.h5"
 
 # 2. DeepCpf1 Weights (for Cas12a)
 # Source: Yonsei Univ. Kim Lab Official GitHub
-wget -O DeepCpf1_model.h5 "[https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5](https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5)"
+wget -O DeepCpf1_weights.h5 "https://raw.githubusercontent.com/myungjinkim/DeepCpf1/master/DeepCpf1_model.h5"
 
 # 3. PRIDICT Weights (for Prime Editor)
 # Source: PRIDICT Official Zenodo Archive (Author's distribution link)
 # Note: The PRIDICT model is large, so the download may take some time.
-wget -O PRIDICT_model.pt "[https://zenodo.org/record/8208465/files/pridict_v2_model.pt](https://zenodo.org/record/8208465/files/pridict_v2_model.pt)"
+wget -O PRIDICT_model.pt "https://zenodo.org/record/8208465/files/pridict_v2_model.pt"
 
 # Return to the parent directory once the downloads are complete.
 cd ..
 ```
+
+## Off-target Analysis (optional)
+
+By default, the tool only performs an on-target scan within the sequence you provide. To also check genome-wide off-target risk for real experimental design, two extra setup steps are needed.
+
+**Step 1: Prepare the reference genome (once per organism)**
+
+Off-target search needs the organism's whole-genome FASTA available locally. `prepare_genome.py` fetches it automatically via the [NCBI Datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/command-line-tools/download-and-install/) (installable via `conda install -c conda-forge ncbi-datasets-cli`).
+
+```bash
+# Prepare genomes for every registered organism (Human, Mouse, Rice, Arabidopsis, Yeast, Ecoli)
+python prepare_genome.py
+
+# Or just one organism
+python prepare_genome.py Human
+
+# Check status only, without downloading
+python prepare_genome.py --list
+```
+
+Downloaded genomes are saved under `genomes/<organism>/` and are already excluded via `.gitignore`.
+
+**Step 2: Install Cas-OFFinder**
+
+Rather than reimplementing genome-scale off-target matching, this relies on the established open-source tool [Cas-OFFinder](https://github.com/snugel/cas-offinder/releases). Download the binary and make sure `cas-offinder` is on your PATH.
+
+**Step 3: Run with `--check-offtargets`**
+
+```bash
+python3 main.py --check-offtargets
+
+# Adjust the allowed mismatch count (default: 3)
+python3 main.py --check-offtargets --max-mismatches 2
+```
+
+If either prerequisite (reference genome or Cas-OFFinder) is missing, the tool won't crash - it prints a clear message and still shows on-target results normally.
+
+> **Note:** For SpCas9 and Prime_Editor (both a 20nt spacer + 3' PAM), the results table shows the real published CFD (Cutting Frequency Determination, Doench et al. 2016) score - labeled "CFD". For SaCas9 (21nt spacer + 3' PAM), it shows the real published SaCas9 specificity model (Tycko et al. 2018, Nat Commun) - labeled "SaCas9-specificity". For every other system (Cas12a, Cas14a), no verified, portable scoring table is known to be available, so it automatically falls back to a simplified mismatch-count-only approximation labeled "heuristic" - which does not weight mismatches by their position relative to the PAM (seed region).
 
 ## How to Run
 
@@ -60,30 +108,31 @@ python3 main.py
 [2] Cas12a       (PAM: TTTN   | Target: DNA)
 [3] Prime_Editor (PAM: NGG    | Target: DNA)
 ...
-Select CRISPR type (1-6): 3
+Select CRISPR type (1-5): 3
 Insert Target DNA Sequence: ATCG...
 >> Starting [PRIDICT Transformer Model] based pegRNA Multi-Dimensional Optimization...
 ```
 
 ###  Manual Package Installation
 
-Depending on your local workstation environment, `pip install -r requirements.txt` might fail due to dependency conflicts. If this occurs, install the core dependencies first, and then manually install the specific AI frameworks required for your target CRISPR system.
+`requirements.txt` only installs the one hard dependency (numpy). The deep learning frameworks (TensorFlow, PyTorch) are deliberately left out of the default install since they're heavy and you only need whichever one matches the CRISPR system(s) you actually plan to use. Install just what you need below. (Note: the tool still runs without any framework installed - on-target scanning and the GC-based mock scores work regardless; a framework is only required when you actually invoke a real deep learning predictor.)
 
 ```bash
-# 1. Core Dependencies (Sequence processing & Data manipulation)
-pip install biopython pandas numpy scikit-learn
+# 1. Required dependency
+pip install numpy
 
-# 2. For SpCas9, SaCas9, and Cas12a Models (DeepSpCas9, DeepCpf1)
-# Requires TensorFlow for deep learning inference.
-pip install tensorflow keras
+# 2. For SpCas9 and Cas12a predictors (DeepSpCas9, DeepCpf1)
+# Requires TensorFlow.
+pip install tensorflow
 
-# 3. For Prime Editor (PE) Models (PRIDICT)
-# Requires PyTorch and Hugging Face Transformers.
-pip install torch torchvision torchaudio transformers
-
-# 4. Utility for downloading pre-trained weights
-pip install gdown
+# 3. For the Prime Editor predictor (PRIDICT)
+# Requires PyTorch.
+pip install torch
 ```
+
+> **Note:** Cas13d (RNA-targeting) is not supported by this tool. The real published Cas13d efficiency predictor (Wessels et al. 2020, Sanjana lab, [gitlab.com/sanjanalab/cas13](https://gitlab.com/sanjanalab/cas13)) is not a downloadable PyTorch weight file - it's a separate R + RNAhybrid + ViennaRNA pipeline, which doesn't fit this project's "download weights, then score instantly" architecture, so it was left out.
+>
+> **Note:** SaCas9 and Cas14a(Cas12f) support guide-finding, but have no deep learning efficiency predictor. A search turned up no real, publicly downloadable pretrained model under either name (the download URLs previously in this codebase pointed to repositories that don't exist). Their results table instead shows a GC-content based heuristic score, labeled "Heuristic (GC-based) Score".
 
 ### Feedback & Support
 
